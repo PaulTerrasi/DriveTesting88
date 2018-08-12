@@ -8,8 +8,6 @@
 package frc.robot;
 
 import edu.wpi.first.wpilibj.IterativeRobot;
-import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 /**
  * The VM is configured to automatically run this class, and to call the
@@ -18,11 +16,15 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
  */
 public class Robot extends IterativeRobot {
 
+  // Decides which operator interface to use
+  IOperatorInterface mOI;
+
   /**
    * Runs when the robot is first powered on.
    */
   @Override
   public void robotInit() {
+    mOI = new OperatorInterfaceImpl();
   }
 
   /**

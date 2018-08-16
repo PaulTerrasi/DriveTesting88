@@ -41,7 +41,7 @@ public class Robot extends IterativeRobot {
     double driveThrottle = mOI.getThrottle();
     double driveTurn = mOI.getTurn();
 
-    mDrive.basicOpenLoop(driveThrottle, driveTurn);
+    mDrive.bestOpenLoopDrive(driveThrottle, driveTurn);
   }
 
   /**

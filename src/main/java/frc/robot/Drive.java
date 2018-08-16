@@ -114,12 +114,64 @@ class Drive {
         // Use cheesy drive
         turn = cheesifyTurn(throttle, turn);
 
-        basicArcade(Util.signedPow(throttle, 3), turn);
+        basicArcade(throttle, turn);
+    }
+
+    // Negative inertia! Basically, the idea is that the robot has some inertia
+    // which theoretically is based on previously commanded values. Returns an
+    // updated turn value
+    double mPrevTurn = 0; // The last turn value
+    double mNegInertialAccumulator = 0; // Accumulates our current inertia value
+    public double negativeInertia(double throttle, double turn) {
+        // Constants for negative inertia
+        final double LARGE_TURN_RATE_THRESHOLD = 0.65;
+        final double INCREASE_TURN_SCALAR = 3.5;
+        final double SMALL_DECREASE_TURN_SCALAR = 4.0;
+        final double LARGE_DECREASE_TURN_SCALAR = 5.0;
+
+        // How much we are currently trying to change the turn value
+        double turnDiff = turn - mPrevTurn;
+        mPrevTurn = turn;
+
+        // Determine which scaling constant to use based on how we are moving
+        double negInertiaScalar;
+        if (turn * turnDiff > 0) {
+            // We are trying to increase our turning rate
+            negInertiaScalar = INCREASE_TURN_SCALAR;
+        } else {
+            if (Math.abs(turn) < LARGE_TURN_RATE_THRESHOLD) {
+                // We are trying to reduce our turning rate to something
+                // relatively close to 0
+                negInertiaScalar = SMALL_DECREASE_TURN_SCALAR;
+            } else {
+                // We are trying to reduce our turning rate, but still want to
+                // be turning fairly fast
+                negInertiaScalar = LARGE_DECREASE_TURN_SCALAR;
+            }
+        }
+
+        // Apply the scalar, and add it to the accumulator
+        double negInertiaPower = turnDiff * negInertiaScalar;
+        mNegInertialAccumulator += negInertiaPower;
+
+        // Add the current negative inertia value to the turn
+        double updatedTurn = turn + mNegInertialAccumulator;
+
+        // Reduce our current inertia
+        if (mNegInertialAccumulator > 1) {
+            mNegInertialAccumulator -= 1;
+        } else if (mNegInertialAccumulator < -1) {
+            mNegInertialAccumulator += 1;
+        } else {
+            mNegInertialAccumulator = 0;
+        }
+
+        return updatedTurn;
     }
 
     // Scales the turn value based on the throttle so that a given turn value
     // corresponds to a set turning radius. Doesn't scale the value if throttle
-    // is at 0. 
+    // is at 0. Returns an updated turn value
     public double cheesifyTurn(double throttle, double turn) {
         // A small error tolerance for floating point errors
         final double EPSILON = .001;

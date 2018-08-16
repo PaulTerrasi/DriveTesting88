@@ -19,12 +19,16 @@ public class Robot extends IterativeRobot {
   // Decides which operator interface to use
   IOperatorInterface mOI;
 
+  // Drivetrain controller
+  Drive mDrive;
+
   /**
    * Runs when the robot is first powered on.
    */
   @Override
   public void robotInit() {
-    mOI = new OperatorInterfaceImpl();
+    mOI = new LogitechControllerOI();
+    mDrive = Drive.getInstance();
   }
 
   /**
@@ -34,6 +38,10 @@ public class Robot extends IterativeRobot {
    */
   @Override
   public void robotPeriodic() {
+    double driveThrottle = mOI.getThrottle();
+    double driveTurn = mOI.getTurn();
+
+    mDrive.basicOpenLoop(driveThrottle, driveTurn);
   }
 
   /**

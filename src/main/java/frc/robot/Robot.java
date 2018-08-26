@@ -31,6 +31,8 @@ public class Robot extends IterativeRobot {
     mDrive = Drive.getInstance();
   }
 
+  
+  int powerCount = 0;
   /**
    * Runs whenever a driver station packet is received, directly following
    * the mode specific periodic functions (disabledPeriodic(), 
@@ -40,14 +42,47 @@ public class Robot extends IterativeRobot {
   public void robotPeriodic() {
     double driveThrottle = mOI.getThrottle();
     double driveTurn = mOI.getTurn();
-
+    
     mDrive.bestOpenLoopDrive(driveThrottle, driveTurn);
+	  
+//	  double power = (powerCount / 100) * .001;
+//	  
+//	  if (powerCount % 100 == 0) {
+//		  System.out.println("Current speed: " + power + "\n");
+//	  }
+//	  
+//	  mDrive.basicArcade(power, 0);
+//	  powerCount++;
+    
+//	  double power = (powerCount / 100) * .001;
+//	  
+//	  if (powerCount % 100 == 0) {
+//		  System.out.println("Current speed: " + power + "\n");
+//	  }
+//	  
+//	  mDrive.basicArcade(0, power);
+//	  powerCount++;
+	  
+//	  double power = (powerCount / 100) * .001;
+//	  
+//	  if (powerCount % 100 == 0) {
+//		  System.out.println("Current speed: " + power + "\n");
+//	  }
+//	  
+//	  double throttle = .2;
+//	  if (powerCount % 400 >= 200) {
+//		  throttle = -.2;
+//	  }
+//	  
+//	  mDrive.basicArcade(throttle, mDrive.cheesifyTurn(throttle, power));
+//	  powerCount++;
   }
 
   /**
    * Runs whenever the robot receives a packet during teleop mode.
    */
   @Override
+  
   public void teleopPeriodic() {
   }
 }

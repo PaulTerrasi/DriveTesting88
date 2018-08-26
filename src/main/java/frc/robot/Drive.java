@@ -6,6 +6,7 @@ import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.FeedbackDevice;
 import com.ctre.phoenix.motorcontrol.LimitSwitchNormal;
 import com.ctre.phoenix.motorcontrol.LimitSwitchSource;
+import com.ctre.phoenix.motorcontrol.NeutralMode;
 import com.ctre.phoenix.motorcontrol.VelocityMeasPeriod;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
 import com.ctre.phoenix.motorcontrol.can.VictorSPX;
@@ -42,8 +43,8 @@ class Drive {
     private static final int TALON_KF = 1;
 
     private static final int TALON_CONFIG_TIMEOUT = 1; // ms
-    private static final double TALON_OPEN_LOOP_RAMP = 0; // none
-    private static final double TALON_CLOSED_LOOP_RAMP = 0; // none
+    private static final double TALON_OPEN_LOOP_RAMP = 1/8; // seconds from 0 to full
+    private static final double TALON_CLOSED_LOOP_RAMP = 1/8; // seconds from 0 to full
     private static final double TALON_MAX_FORWARD_VOLTAGE = 1; // percent vbus
     private static final double TALON_MAX_REVERSE_VOLTAGE = -1; // percent vbus
     private static final double TALON_MIN_FORWARD_VOLTAGE = 0; // percent vbus
@@ -68,8 +69,9 @@ class Drive {
     private static final int TALON_MOTION_CRUISE_VELOCITY = 0; // Sensor ticks per 100ms
     private static final int TALON_MOTION_ACCElERATION = 0; // Sensor ticks per 100ms^2
     private static final int TALON_TRAJECTORY_PERIOD = 0; // ms
-    private static final int TALON_PEAK_CURRENT_LIMIT = 80; // disabled
-    private static final int TALON_CONTINUOUS_CURRENT_LIMIT = 0; // disabled
+    private static final int TALON_PEAK_CURRENT_LIMIT = 60; // Amps before limiting kicks in
+    private static final int TALON_PEAK_CURRENT_DURATION = 1; // Ms until limiting kicks in
+    private static final int TALON_CONTINUOUS_CURRENT_LIMIT = 40; // Amps to limit at
 
     // Get the singleton instance of the drive
     public static Drive getInstance() {
@@ -81,6 +83,7 @@ class Drive {
 
         return instance;
     }
+    
 
     // Initializes the drive
     private Drive() {
@@ -97,9 +100,14 @@ class Drive {
         for (int i = 0; i < MOTORS_PER_SIDE - 1; i++) {
             leftFollowerVictors[i] = new VictorSPX(LEFT_FOLLOWER_CAN_IDS[i]);
             leftFollowerVictors[i].follow(leftMasterTalon);
-            rightFollowerVictors[i] = new VictorSPX(RIGHT_FOLLOWER_CAN_IDS[i+1]);
+            leftFollowerVictors[i].setNeutralMode(NeutralMode.Brake);
+            rightFollowerVictors[i] = new VictorSPX(RIGHT_FOLLOWER_CAN_IDS[i]);
             rightFollowerVictors[i].follow(rightMasterTalon);
+            rightFollowerVictors[i].setNeutralMode(NeutralMode.Brake);
         }
+        
+        leftMasterTalon.setNeutralMode(NeutralMode.Brake);
+        rightMasterTalon.setNeutralMode(NeutralMode.Brake);
     }
 
     // This is the open loop drive code that we determined to work best.
@@ -108,11 +116,30 @@ class Drive {
         // makes more of the joystick correspond to lower speeds
         int throttleExponent = 3;
         int turnExponent = 3;
-        throttle = Util.signedPow(throttle, throttleExponent);
-        turn = Util.signedPow(turn, turnExponent);
+        
+        if (Math.abs(throttle) < 0.001) {
+        	throttle = throttle * .92;
+        	Util.signedPow(throttleExponent, throttleExponent);
+        	throttle += .08 * Math.signum(throttle);
+        	
+        	if (Math.abs(turn) < 0.001) {
+            	turn = turn * .92;
+            	Util.signedPow(turnExponent, turnExponent);
+            	turn += .08 * Math.signum(turn);
+            }
+        } else if (Math.abs(turn) < 0.001) {
+        	turn = turn * .92;
+        	Util.signedPow(turnExponent, turnExponent);
+        	turn += .075 * Math.signum(turn);
+        }
+        
 
         // Use cheesy drive
         turn = cheesifyTurn(throttle, turn);
+        
+        // Negative inertia!
+        turn = negativeInertia(throttle, turn);
+        
 
         basicArcade(throttle, turn);
     }
@@ -184,7 +211,7 @@ class Drive {
         if (Math.abs(throttle) < EPSILON) {
             return turn;
         } else if (Math.abs(throttle) < MIN_THROTTLE_TO_SCALE_TURN) {
-            return MIN_THROTTLE_TO_SCALE_TURN * turn;
+            return Math.signum(throttle) * MIN_THROTTLE_TO_SCALE_TURN * turn;
         } else {
             return throttle * turn;
         }
@@ -194,8 +221,8 @@ class Drive {
     // Honestly pretty terrible. Turning precisely is basically impossibe
     public void basicArcade(double throttle, double turn) {
 
-        double left = throttle - turn;
-        double right = throttle + turn;
+        double left = throttle + turn;
+        double right = throttle - turn;
 
         openLoopDrive(left, right);
     }
@@ -203,8 +230,8 @@ class Drive {
     // Sets the raw values (from -1 to 1) for the left and right sides of the
     // drivetrain
     public void openLoopDrive(double leftPercent, double rightPercent) {
-        // RIGHT IS INVERTED HERE
-        rightPercent = -rightPercent;
+        // LEFT IS INVERTED HERE
+        leftPercent = -leftPercent;
  
         leftMasterTalon.set(ControlMode.PercentOutput, leftPercent);
         rightMasterTalon.set(ControlMode.PercentOutput, rightPercent);
@@ -212,6 +239,7 @@ class Drive {
 
     // Configures all of the persistent settings on a master talon
     private void configDriveTalon(TalonSRX talon) {
+    	talon.enableCurrentLimit(true);
         
         talon.configSelectedFeedbackSensor(TALON_FEEDBACK_SENSOR, TALON_PID_IDX, TALON_CONFIG_TIMEOUT);
         talon.config_kP(TALON_PID_IDX, TALON_KP, TALON_CONFIG_TIMEOUT);
@@ -228,7 +256,7 @@ class Drive {
         talon.configNeutralDeadband(TALON_NEUTRAL_DEADBAND, TALON_CONFIG_TIMEOUT);
         talon.configVoltageCompSaturation(TALON_VOLTAGE_COMP_SATURATION, TALON_CONFIG_TIMEOUT);
         talon.configVoltageMeasurementFilter(TALON_VOLTAGE_FILTER_WINDOW, TALON_CONFIG_TIMEOUT);
-        talon.configSelectedFeedbackCoefficient(TALON_FEEDBACK_COEFFICIENT, TALON_PID_IDX, TALON_CONFIG_TIMEOUT);
+//        talon.configSelectedFeedbackCoefficient(TALON_FEEDBACK_COEFFICIENT, TALON_PID_IDX, TALON_CONFIG_TIMEOUT);
         talon.configVelocityMeasurementPeriod(TALON_VELOCITY_PERIOD, TALON_CONFIG_TIMEOUT);
         talon.configForwardLimitSwitchSource(TALON_LIMIT_SWITCH_SOURCE, TALON_LIMIT_SWITCH_NORMAL, TALON_CONFIG_TIMEOUT);
         talon.configReverseLimitSwitchSource(TALON_LIMIT_SWITCH_SOURCE, TALON_LIMIT_SWITCH_NORMAL, TALON_CONFIG_TIMEOUT);
@@ -239,15 +267,14 @@ class Drive {
         talon.config_IntegralZone(TALON_PID_IDX, TALON_INTEGRAL_ZONE, TALON_CONFIG_TIMEOUT);
         talon.configAllowableClosedloopError(TALON_PID_IDX, TALON_MIN_CLOSED_LOOP_ERROR, TALON_CONFIG_TIMEOUT);
         talon.configMaxIntegralAccumulator(TALON_PID_IDX, TALON_MAX_INTEGRAL, TALON_CONFIG_TIMEOUT);
-        talon.configClosedLoopPeakOutput(TALON_PID_IDX, TALON_MAX_CLOSED_LOOP_VOLTAGE, TALON_CONFIG_TIMEOUT);
-        talon.configClosedLoopPeriod(TALON_PID_IDX, TALON_CLOSED_LOOP_PERIOD, TALON_CONFIG_TIMEOUT);
-        talon.configAuxPIDPolarity(TALON_AUX_PID_POLARITY, TALON_CONFIG_TIMEOUT);
+//        talon.configClosedLoopPeakOutput(TALON_PID_IDX, TALON_MAX_CLOSED_LOOP_VOLTAGE, TALON_CONFIG_TIMEOUT);
+//        talon.configClosedLoopPeriod(TALON_PID_IDX, TALON_CLOSED_LOOP_PERIOD, TALON_CONFIG_TIMEOUT);
+//        talon.configAuxPIDPolarity(TALON_AUX_PID_POLARITY, TALON_CONFIG_TIMEOUT);
         talon.configMotionCruiseVelocity(TALON_MOTION_CRUISE_VELOCITY, TALON_CONFIG_TIMEOUT);
         talon.configMotionAcceleration(TALON_MOTION_ACCElERATION, TALON_CONFIG_TIMEOUT);
         talon.configMotionProfileTrajectoryPeriod(TALON_TRAJECTORY_PERIOD, TALON_CONFIG_TIMEOUT);
         talon.configPeakCurrentLimit(TALON_PEAK_CURRENT_LIMIT, TALON_CONFIG_TIMEOUT);
         talon.configContinuousCurrentLimit(TALON_CONTINUOUS_CURRENT_LIMIT, TALON_CONFIG_TIMEOUT);
-        talon.configPeakCurrentDuration(1, TALON_CONFIG_TIMEOUT);
     }
         
 }

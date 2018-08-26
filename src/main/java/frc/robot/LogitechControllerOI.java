@@ -8,7 +8,7 @@ import edu.wpi.first.wpilibj.Joystick;
 class LogitechControllerOI implements IOperatorInterface {
 
 	private static final int DRIVER_JOYSTICK_PORT = 2;
-	private static final double DEADBAND = 0.025;
+	private static final double DEADBAND = 0.05;
 
     private Joystick mDriverJoystick;
 
@@ -18,13 +18,13 @@ class LogitechControllerOI implements IOperatorInterface {
 
 	@Override
 	public double getThrottle() {
-		return IOperatorInterface.applyDeadband(mDriverJoystick.getRawAxis(1), 
+		return -IOperatorInterface.applyDeadband(mDriverJoystick.getRawAxis(1), 
 				DEADBAND, 1);
 	}
 
 	@Override
 	public double getTurn() {
-		return IOperatorInterface.applyDeadband(mDriverJoystick.getRawAxis(5), 
+		return IOperatorInterface.applyDeadband(mDriverJoystick.getRawAxis(4), 
 				DEADBAND, 1);
 	}
 

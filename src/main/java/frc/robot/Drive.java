@@ -34,6 +34,11 @@ class Drive {
     private VictorSPX[] leftFollowerVictors = new VictorSPX[MOTORS_PER_SIDE - 1];
     private VictorSPX[] rightFollowerVictors = new VictorSPX[MOTORS_PER_SIDE - 1];
 
+    // Minimum power values for the drivetrain to overcome friction
+    private static final double MIN_THROTTLE = .08;
+    private static final double MIN_TURN_STILL = .08;
+    private static final double MIN_TURN_MOVING = .075;
+
     // Drive talon config values
     private static final FeedbackDevice TALON_FEEDBACK_SENSOR = FeedbackDevice.QuadEncoder;
     private static final int TALON_PID_IDX = 0;
@@ -117,22 +122,14 @@ class Drive {
         int throttleExponent = 3;
         int turnExponent = 3;
         
-        if (Math.abs(throttle) < 0.001) {
-        	throttle = throttle * .92;
-        	Util.signedPow(throttleExponent, throttleExponent);
-        	throttle += .08 * Math.signum(throttle);
-        	
-        	if (Math.abs(turn) < 0.001) {
-            	turn = turn * .92;
-            	Util.signedPow(turnExponent, turnExponent);
-            	turn += .08 * Math.signum(turn);
-            }
-        } else if (Math.abs(turn) < 0.001) {
-        	turn = turn * .92;
-        	Util.signedPow(turnExponent, turnExponent);
-        	turn += .075 * Math.signum(turn);
+        throttle = Util.signedThresholdedPow(throttle, throttleExponent, MIN_THROTTLE, 1);
+        double minTurn;
+        if (Math.abs(throttle) < Util.EPSILON) {
+            minTurn = MIN_TURN_STILL;
+        } else {
+            minTurn = MIN_TURN_MOVING;
         }
-        
+        turn = Util.signedThresholdedPow(turn, turnExponent, minTurn, 1);
 
         // Use cheesy drive
         turn = cheesifyTurn(throttle, turn);
@@ -140,7 +137,6 @@ class Drive {
         // Negative inertia!
         turn = negativeInertia(throttle, turn);
         
-
         basicArcade(throttle, turn);
     }
 
